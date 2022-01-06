@@ -500,8 +500,8 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
         return ns.print(`--prioritize-invites Skipping working for faction for now...`);
 
     let lastStatusUpdateTime;
-	let duration;
-	let eta;
+    let duration;
+    let eta;
     while ((currentReputation = ns.getFactionRep(factionName)) < factionRepRequired) {
         const factionWork = await detectBestFactionWork(ns, factionName); // Before each loop - determine what work gives the most rep/second for our current stats
         if (await getNsDataThroughFile(ns, `ns.workForFaction('${factionName}', '${factionWork}',  ${shouldFocusAtWork})`, '/Temp/work-for-faction.txt')) {
@@ -514,8 +514,8 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
         }
         let status = `Doing '${factionWork}' work for "${factionName}" until ${factionRepRequired.toLocaleString()} rep.`;
         if (lastFactionWorkStatus != status || (Date.now() - lastStatusUpdateTime) > statusUpdateInterval) {
-			duration = Math.floor((factionRepRequired - currentReputation) / (ns.getPlayer().workRepGainRate * 5) * 1000);
-			eta = formatDuration(duration);
+        duration = Math.floor((factionRepRequired - currentReputation) / (ns.getPlayer().workRepGainRate * 5) * 1000);
+        eta = formatDuration(duration);
             ns.print((lastFactionWorkStatus = status) + ` Currently at ${Math.round(currentReputation).toLocaleString()}, earning ${(ns.getPlayer().workRepGainRate * 5).toFixed(2)} rep/sec. ETA: ` + eta);
             lastStatusUpdateTime = Date.now();
         }
@@ -591,12 +591,16 @@ export async function tryBuyReputation(ns) {
     }
 }
 
+const serverByCompany = { "Bachman & Associates": "b-and-a", "ECorp": "ecorp", "Clarke Incorporated": "clarkinc", "OmniTek Incorporated": "omnitek", "NWO": "nwo", "Blade Industries": "blade", "MegaCorp": "megacorp", "KuaiGong International": "kuai-gong", "Fulcrum Secret Technologies": "fulcrumtech", "Four Sigma": "4sigma" };
+
 /** @param {NS} ns */
 export async function workForMegacorpFactionInvite(ns, factionName, waitForInvite) {
     const companyConfig = companySpecificConfigs.find(c => c.name == factionName); // For anything company-specific
     const companyName = companyConfig?.companyName || factionName; // Name of the company that gives the faction (same for all but Fulcrum)
     const statModifier = companyConfig?.statModifier || 0; // How much e.g. Hack / Cha is needed for a promotion above the base requirement for the job
     const repRequiredForFaction = companyConfig?.repRequiredForFaction || 200000; // Required to unlock the faction
+    const companyServer = serverByCompany[companyName]; // Where to backdoor for reduced cancelation penalties
+    
 
     let player = ns.getPlayer();
     if (player.factions.includes(factionName))
@@ -611,8 +615,10 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
     ns.print(`Going to work for Company "${companyName}" next...`)
     let currentReputation, currentRole = "", currentJobTier = -1; // TODO: Derive our current position and promotion index based on player.jobs[companyName]
     let lastStatusUpdateTime, lastStatus = "";
-	let duration;
-	let eta;
+    let duration;
+    let eta;
+    let backdooredServers;
+    let cancelationPenalty = .5;
     let studying = false, working = false;
     while (((currentReputation = ns.getCompanyRep(companyName)) < repRequiredForFaction) && !player.factions.includes(factionName)) {
         player = ns.getPlayer();
@@ -681,9 +687,11 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
         }
         if (lastStatus != status || (Date.now() - lastStatusUpdateTime) > statusUpdateInterval) {
             player = ns.getPlayer();
-			duration = Math.floor((((requiredRep || repRequiredForFaction) - currentReputation) / player.workRepGainRate * 5) * 1000);
-			eta = formatDuration(duration);
-            ns.print(`Currently a "${player.jobs[companyName]}" ('${currentRole}' #${currentJobTier}) for "${companyName}" earning ${(player.workRepGainRate * 5).toFixed(2)} rep/sec.\n` +
+            backdooredServers = ns.read('/Temp/backdoored-servers.txt');
+            cancelationPenalty = (backdooredServers && backdooredServers.includes(companyServer)) ? .75 : .5 ;
+            duration = Math.floor((((requiredRep || repRequiredForFaction) - currentReputation) / (player.workRepGainRate * 5 * cancelationPenalty)) * 1000);
+            eta = formatDuration(duration);
+            ns.print(`Currently a "${player.jobs[companyName]}" ('${currentRole}' #${currentJobTier}) for "${companyName}" earning ${(player.workRepGainRate * 5 * cancelationPenalty).toFixed(2)} rep/sec.\n` +
                 `${status}\nCurrent player stats are Hack:${player.hacking} ${player.hacking >= (requiredHack || 0) ? '✓' : '✗'} ` +
                 `Cha:${player.charisma} ${player.charisma >= (requiredCha || 0) ? '✓' : '✗'} ` +
                 `Rep:${Math.round(currentReputation).toLocaleString()} ${currentReputation >= (requiredRep || repRequiredForFaction) ? '✓' : '✗ ETA: ' + eta}`);
